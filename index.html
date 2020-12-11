@@ -28,31 +28,17 @@
         request.open("GET", "data.json");
         request.onload = () => {
             let data = JSON.parse(request.responseText);
-            clusters = data['clusters']
-            boundaries = data['polygons']
-            console.log(data)
-            const mymap = L.map('mapid').setView(clusters[0][0], 1); // center map on first coordinate
-            initializeMap(mymap)
 
-            colorCode = {}
-            for (const [index, coordinates] of clusters.entries()) {
-                if (!colorCode[index])
-                    colorCode[index] = '#' + Math.floor(Math.random() * ((2 ** 24) - 1)).toString(16); // Adapted from https://stackoverflow.com/questions/1484506/random-color-generator#comment39432667_1484506
-                const polygon = L.polygon(boundaries[index], { color: colorCode[index] }).addTo(mymap);
-                for (const coordinate of coordinates) {
-                    const marker = L.circle([coordinate[0], coordinate[1]], {
-                        color: colorCode[index]
-                    }).addTo(mymap); // add circle marker to map
-                }
-            }
+
+            const mymap = L.map('mapid').setView([data["nodes"][0][0][8], data["nodes"][0][0][9]], 1); // center map on first coordinate
+            initializeMap(mymap);
+            addFeatures(mymap, data);
         }
         request.send(null);
 
 
         /**
-         * Initializes a map with circle markers placed at the given coordinates. 
-         * @param {number[]} coordinates An array of the form [latitude, longitude, communityLevel].
-         * @param {Object<number, string>} [colorCode] A mapping from clutster to color. Random colors (24-bit) are assigned to all clusters with no color mapping.
+         * Initializes a map with circle markers placed at the given coordinates.
          */
         function initializeMap(map) {
             L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
@@ -63,6 +49,44 @@
                 zoomOffset: -1,
                 accessToken: 'pk.eyJ1Ijoib3NoYXJha2kiLCJhIjoiY2tlZTFtaGxkMHhmNzMxbXQ4Z2x2YXN2ZyJ9.KCrCutRDObY0pQMPUyMcAA'
             }).addTo(map);
+        }
+
+        function addFeatures(map, data, drawRegionIDs = true, drawNodes = false) {
+            clusters = data['nodes']
+            boundaries = data['geometries']
+            centroids = data['centroids']
+            communityIDs = data["community_IDs"]
+
+            colorCode = {}
+
+            for (const [index, cluster] of clusters.entries()) {
+                if (!colorCode[index])
+                    colorCode[index] = '#' + Math.floor(Math.random() * ((2 ** 24) - 1)).toString(16); // Adapted from https://stackoverflow.com/questions/1484506/random-color-generator#comment39432667_1484506
+                if (boundaries) {
+                    if (boundaries[index]['type'] == 'polygon') {
+                        p = L.polygon(boundaries[index]['geometry'], { color: colorCode[index] });
+                        if (drawRegionIDs)
+                            p.bindTooltip(data["level"].toString() + communityIDs[index].toString(), { permanent: true, direction: "center" })
+                        p.addTo(map)
+                    }
+                    else {
+                        // multipolygon
+                        for (const polygon of boundaries[index]['geometry']) {
+                            p = L.polygon(polygon, { color: colorCode[index] })
+                            if (drawRegionIDs)
+                                p.bindTooltip(data["level"].toString() + communityIDs[index].toString(), { permanent: true, direction: "center" })
+                            p.addTo(map)
+                        }
+                    }
+                }
+
+                if (drawNodes)
+                    for (const node of cluster) {
+                        const marker = L.circle([node[8], node[9]], {
+                            color: colorCode[index]
+                        }).addTo(map); // add circle marker to map
+                    }
+            }
         }
     </script>
 </body>
