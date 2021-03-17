@@ -21,7 +21,7 @@ false, colorCode = {})
 ```
 
 `colorCode` allows you to manually assign colors to specific regions via their IDs. For
-example,
+example:
 
 ```JavaScript
 {
