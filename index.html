@@ -29,10 +29,10 @@
         request.onload = () => {
             let data = JSON.parse(request.responseText);
 
-
-            const mymap = L.map('mapid').setView([data["nodes"][0][0][8], data["nodes"][0][0][9]], 1); // center map on first coordinate
+            greenwichCentered = true
+            const mymap = L.map('mapid').setView(!greenwichCentered && data["nodes"] ? [data["nodes"][0][0]["latlng"][0], data["nodes"][0][0]["latlng"][1]] : [51.4934, 0.0098], 1); // center map on first node or Greenwich
             initializeMap(mymap);
-            addFeatures(mymap, data);
+            addFeatures(mymap, data, true, false);
         }
         request.send(null);
 
@@ -41,7 +41,7 @@
          * Initializes a map with circle markers placed at the given coordinates.
          */
         function initializeMap(map) {
-            L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+            L.tileLayer('https://api.mapbox.com/styles/v1/osharaki/ckl30fuju1yco17rm39wb717f/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1Ijoib3NoYXJha2kiLCJhIjoiY2tlZTFpdTVxMHhndDMzbXRjYXhzeG8zMCJ9.1MkD4Nv_bqTVL6ZGLnO7rQ', {
                 attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
                 maxZoom: 18,
                 id: 'mapbox/streets-v11',
@@ -51,41 +51,65 @@
             }).addTo(map);
         }
 
-        function addFeatures(map, data, drawRegionIDs = true, drawNodes = false) {
+        function addFeatures(map, data, drawRegions = true, drawRegionIDs = true, drawNodes = false, colorCode = {}) {
             clusters = data['nodes']
             boundaries = data['geometries']
-            centroids = data['centroids']
             communityIDs = data["community_IDs"]
 
-            colorCode = {}
-
-            for (const [index, cluster] of clusters.entries()) {
-                if (!colorCode[index])
-                    colorCode[index] = '#' + Math.floor(Math.random() * ((2 ** 24) - 1)).toString(16); // Adapted from https://stackoverflow.com/questions/1484506/random-color-generator#comment39432667_1484506
-                if (boundaries) {
-                    if (boundaries[index]['type'] == 'polygon') {
-                        p = L.polygon(boundaries[index]['geometry'], { color: colorCode[index] });
-                        if (drawRegionIDs)
-                            p.bindTooltip(data["level"].toString() + communityIDs[index].toString(), { permanent: true, direction: "center" })
-                        p.addTo(map)
-                    }
-                    else {
-                        // multipolygon
-                        for (const polygon of boundaries[index]['geometry']) {
-                            p = L.polygon(polygon, { color: colorCode[index] })
-                            if (drawRegionIDs)
-                                p.bindTooltip(data["level"].toString() + communityIDs[index].toString(), { permanent: true, direction: "center" })
+            for (const [index, cluster] of boundaries.entries()) {
+                let regionID;
+                let regionIdDrawn = false // Prevents region ID from being rendered more than once for multipolygon region
+                if (communityIDs)
+                    regionID = data["level"] ? data["level"].toString() + communityIDs[index].toString() : communityIDs[index].toString()
+                else
+                    regionID = index
+                if (!colorCode[regionID])
+                    colorCode[regionID] = '#' + Math.floor(Math.random() * ((2 ** 24) - 1)).toString(16); // Adapted from https://stackoverflow.com/questions/1484506/random-color-generator#comment39432667_1484506
+                if (drawRegions) {
+                    if (boundaries && Object.keys(boundaries[index]).length != 0) {
+                        if (boundaries[index]['type'] == 'polygon') {
+                            p = L.polygon(boundaries[index]['geometry'], { color: colorCode[regionID], fillOpacity: 0.2 });
+                            if (drawRegionIDs) {
+                                if (communityIDs)
+                                    p.bindTooltip(data["level"].toString() + communityIDs[index].toString(), { permanent: true, direction: "center" })
+                                else
+                                    console.warn("No community IDs present in region file!")
+                            }
                             p.addTo(map)
                         }
+                        else {
+                            // multipolygon
+                            for (const polygon of boundaries[index]['geometry']) {
+                                p = L.polygon(polygon, { color: colorCode[regionID], fillOpacity: 0.2 })
+                                if (drawRegionIDs && !regionIdDrawn) {
+                                    if (communityIDs)
+                                        p.bindTooltip(data["level"].toString() + communityIDs[index].toString(), { permanent: true, direction: "center" })
+                                    else
+                                        console.warn("No community IDs present in region file!")
+                                }
+                                regionIdDrawn = true
+                                p.addTo(map)
+                            }
+                        }
                     }
+                    else
+                        console.warn("No region geometries present in region file!")
                 }
 
-                if (drawNodes)
-                    for (const node of cluster) {
-                        const marker = L.circle([node[8], node[9]], {
-                            color: colorCode[index]
-                        }).addTo(map); // add circle marker to map
-                    }
+                if (drawNodes) {
+                    if (clusters)
+                        for (const node of clusters[index]) {
+                            if (node["latlng"]) {
+                                const marker = L.circle([node["latlng"][0], node["latlng"][1]], {
+                                    color: colorCode[regionID]
+                                }).addTo(map); // add circle marker to map
+                            }
+                            else
+                                console.warn('Node entry has no "latlng" attribute!')
+                        }
+                    else
+                        console.warn("No nodes present in region file!")
+                }
             }
         }
     </script>
